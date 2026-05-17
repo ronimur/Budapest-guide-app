@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Budapest Guide</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Sora:wght@400;600&family=Lora:ital@0;1&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --warm-bg: #faf7f2;
+    --cream: #f5f1ec;
+    --viktor-blue: #3d5a8c;
+    --viktor-gold: #d4a574;
+    --zsuzsi-rust: #c85a3a;
+    --zsuzsi-warm: #f4d5c4;
+    --aron-orange: #ff8c42;
+    --aron-light: #ffe8d4;
+    --text-dark: #2c2416;
+    --text-light: #6b6158;
+  }
+
+  body {
+    font-family: 'Sora', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: linear-gradient(135deg, var(--warm-bg) 0%, #f9f4ef 100%);
+    color: var(--text-dark);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+
+  body::before {
+    content: "";
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    opacity: 0.02;
+    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><filter id="noise"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="4" result="noise"/></filter><rect width="100" height="100" fill="black" filter="url(%23noise)"/></svg>');
+    pointer-events: none;
+    z-index: -1;
+  }
+
+  header {
+    padding: 24px 20px 16px;
+    background: var(--warm-bg);
+    border-bottom: 2px solid var(--viktor-gold);
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    position: relative;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.04);
+  }
+
+  header h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    color: var(--text-dark);
+  }
+
+  header h1 span {
+    color: var(--aron-orange);
+    display: block;
+    font-size: 20px;
+    margin-top: -4px;
+  }
+
+  .header-right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+  }
+
+  #location-pill {
+    background: linear-gradient(135deg, var(--viktor-blue), var(--viktor-gold));
+    color: white;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+    box-shadow: 0 4px 12px rgba(61, 90, 140, 0.2);
+    text-align: center;
+    min-width: 140px;
+  }
+
+  #map-toggle-btn {
+    background: white;
+    border: 2px solid var(--viktor-gold);
+    color: var(--viktor-blue);
+    padding: 7px 14px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: 'Sora', sans-serif;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+  }
+
+  #map-toggle-btn:hover {
+    background: var(--viktor-gold);
+    color: white;
+  }
+
+  #map-toggle-btn.active {
+    background: var(--viktor-blue);
+    border-color: var(--viktor-blue);
+    color: white;
+  }
+
+  #map-container {
+    display: none;
+    height: 260px;
+    border-bottom: 2px solid var(--viktor-gold);
+    position: relative;
+  }
+
+  #map {
+    height: 100%;
+    width: 100%;
+  }
+
+  #chat-area {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  #chat-area::-webkit-scrollbar { width: 6px; }
+  #chat-area::-webkit-scrollbar-track { background: var(--cream); }
+  #chat-area::-webkit-scrollbar-thumb { background: var(--viktor-gold); border-radius: 3px; }
+
+  .turn {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .user-bubble {
+    align-self: flex-end;
+    background: linear-gradient(135deg, var(--viktor-blue), #2c4a70);
+    color: white;
+    padding: 12px 16px;
+    border-radius: 20px 20px 4px 20px;
+    max-width: 85%;
+    font-size: 15px;
+    line-height: 1.5;
+    box-shadow: 0 4px 12px rgba(61, 90, 140, 0.15);
+    animation: fadeInRight 0.4s ease-out;
+  }
+
+  @keyframes fadeInRight {
+    from { opacity: 0; transform: translateX(20px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  .agent-card {
+    border-radius: 16px;
+    padding: 20px;
+    background: white;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+    border-left: 5px solid;
+    animation: cardReveal 0.6s ease-out backwards;
+  }
+
+  .turn:nth-child(1) .agent-card:nth-of-type(1) { animation-delay: 0.2s; }
+  .turn:nth-child(1) .agent-card:nth-of-type(2) { animation-delay: 0.4s; }
+  .turn:nth-child(1) .agent-card:nth-of-type(3) { animation-delay: 0.6s; }
+
+  @keyframes cardReveal {
+    from { opacity: 0; transform: translateY(20px) rotateZ(-1deg); }
+    to { opacity: 1; transform: translateY(0) rotateZ(0); }
+  }
+
+  .agent-card.viktor {
+    border-left-color: var(--viktor-blue);
+    background: linear-gradient(135deg, white 0%, rgba(61, 90, 140, 0.03) 100%);
+  }
+  .agent-card.zsuzsi {
+    border-left-color: var(--zsuzsi-rust);
+    background: linear-gradient(135deg, white 0%, rgba(200, 90, 58, 0.03) 100%);
+    transform: rotateZ(0.5deg);
+  }
+  .agent-card.aron {
+    border-left-color: var(--aron-orange);
+    background: linear-gradient(135deg, white 0%, rgba(255, 140, 66, 0.03) 100%);
+    transform: rotateZ(-0.5deg);
+  }
+
+  .agent-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--cream);
+  }
+
+  .agent-emoji { font-size: 24px; display: block; }
+
+  .agent-name {
+    font-family: 'Playfair Display', serif;
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+  }
+
+  .agent-card.viktor .agent-name { color: var(--viktor-blue); }
+  .agent-card.zsuzsi .agent-name { color: var(--zsuzsi-rust); }
+  .agent-card.aron .agent-name { color: var(--aron-orange); }
+
+  .agent-body {
+    font-size: 14px;
+    line-height: 1.75;
+    color: var(--text-dark);
+    margin-bottom: 16px;
+    font-family: 'Lora', serif;
+  }
+
+  .agent-body p { margin-bottom: 0; }
+
+  /* Event block: paragraph with a bold title */
+  .agent-body p:has(> strong) {
+    padding: 14px 0 12px;
+    border-bottom: 1px solid rgba(212, 165, 116, 0.18);
+  }
+  .agent-body p:has(> strong):last-of-type {
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+
+  /* Intro / closing text (no bold, no italic) */
+  .agent-body p:not(:has(strong)):not(:has(em)) {
+    font-family: 'Sora', sans-serif;
+    font-size: 12.5px;
+    color: var(--text-light);
+    font-style: italic;
+    padding: 8px 0;
+  }
+
+  /* ── Place name (strong) ── */
+  .agent-body strong {
+    font-family: 'Playfair Display', serif;
+    font-size: 16px;
+    font-weight: 700;
+    display: block;
+    line-height: 1.3;
+    margin-bottom: 6px;
+  }
+  .agent-card.viktor .agent-body strong { color: var(--viktor-blue); }
+  .agent-card.zsuzsi .agent-body strong { color: var(--zsuzsi-rust); }
+  .agent-card.aron .agent-body strong { color: var(--aron-orange); }
+
+  /* Place name link — no underline, subtle ↗ shows interactivity */
+  .agent-body strong a {
+    color: inherit;
+    text-decoration: none;
+    cursor: pointer;
+  }
+  .agent-body strong a::after {
+    content: ' ↗';
+    font-family: 'Sora', sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    opacity: 0.35;
+    transition: opacity 0.2s;
+  }
+  .agent-body strong a:hover { opacity: 0.8; }
+  .agent-body strong a:hover::after { opacity: 0.9; }
+
+  /* ── Location tag (em) — display only pill, NOT a link ── */
+  .agent-body em {
+    display: inline-block;
+    font-style: normal;
+    font-size: 10px;
+    font-family: 'Sora', sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.9px;
+    color: var(--text-light);
+    background: var(--cream);
+    border: 1px solid rgba(107, 97, 88, 0.12);
+    padding: 2px 9px 2px 6px;
+    border-radius: 20px;
+    margin-bottom: 9px;
+    cursor: default;
+    user-select: none;
+  }
+  .agent-body em::before { content: '📍 '; font-size: 9px; }
+
+  /* ALL links in body — no underline, no color change (only strong a is styled above) */
+  .agent-body a { color: inherit; text-decoration: none; }
+
+  /* Headings (Áron uses ### headers) */
+  .agent-body h1, .agent-body h2 {
+    font-family: 'Playfair Display', serif;
+    font-size: 16px;
+    font-weight: 700;
+    margin: 14px 0 4px;
+    color: var(--text-dark);
+  }
+  .agent-body h3 {
+    font-family: 'Playfair Display', serif;
+    font-size: 14px;
+    font-weight: 700;
+    margin: 12px 0 4px;
+    color: var(--text-dark);
+  }
+  .agent-body ul, .agent-body ol { padding-left: 18px; margin: 4px 0 8px; }
+  .agent-body li { margin-bottom: 3px; font-size: 13.5px; }
+
+  .maps-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    border: none;
+    font-family: 'Sora', sans-serif;
+  }
+
+  .agent-card.viktor .maps-btn { background: var(--viktor-blue); color: white; }
+  .agent-card.viktor .maps-btn:hover { background: var(--viktor-gold); color: var(--viktor-blue); box-shadow: 0 6px 16px rgba(212, 165, 116, 0.3); }
+  .agent-card.zsuzsi .maps-btn { background: var(--zsuzsi-rust); color: white; }
+  .agent-card.zsuzsi .maps-btn:hover { background: var(--zsuzsi-warm); color: var(--zsuzsi-rust); box-shadow: 0 6px 16px rgba(200, 90, 58, 0.2); }
+  .agent-card.aron .maps-btn { background: var(--aron-orange); color: white; }
+  .agent-card.aron .maps-btn:hover { background: var(--aron-light); color: var(--aron-orange); box-shadow: 0 6px 16px rgba(255, 140, 66, 0.2); }
+
+  .typing-indicator {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding: 16px 20px;
+    background: var(--cream);
+    border-radius: 16px;
+    width: fit-content;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.04);
+  }
+
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--viktor-gold);
+    animation: bounce 1.2s infinite;
+  }
+  .dot:nth-child(2) { animation-delay: 0.2s; }
+  .dot:nth-child(3) { animation-delay: 0.4s; }
+
+  @keyframes bounce {
+    0%, 60%, 100% { transform: translateY(0); }
+    30% { transform: translateY(-8px); }
+  }
+
+  #input-area {
+    padding: 16px;
+    background: var(--warm-bg);
+    border-top: 2px solid var(--viktor-gold);
+    display: flex;
+    gap: 12px;
+    align-items: flex-end;
+    box-shadow: 0 -4px 12px rgba(0,0,0,0.04);
+  }
+
+  #msg-input {
+    flex: 1;
+    background: white;
+    border: 2px solid var(--cream);
+    border-radius: 20px;
+    color: var(--text-dark);
+    font-size: 15px;
+    padding: 12px 18px;
+    resize: none;
+    min-height: 44px;
+    max-height: 120px;
+    outline: none;
+    line-height: 1.4;
+    font-family: 'Sora', sans-serif;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  }
+
+  #msg-input:focus {
+    border-color: var(--viktor-gold);
+    box-shadow: 0 4px 16px rgba(212, 165, 116, 0.2);
+  }
+
+  #msg-input::placeholder { color: var(--text-light); }
+
+  #send-btn {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--viktor-blue), var(--viktor-gold));
+    border: none;
+    color: white;
+    font-size: 20px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(61, 90, 140, 0.2);
+  }
+
+  #send-btn:hover { transform: scale(1.05); box-shadow: 0 6px 20px rgba(61, 90, 140, 0.3); }
+  #send-btn:active { transform: scale(0.95); }
+  #send-btn:disabled { background: var(--text-light); cursor: not-allowed; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px 40px;
+    color: var(--text-light);
+    animation: fadeIn 0.6s ease-out;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  .empty-state h2 {
+    font-family: 'Playfair Display', serif;
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--text-dark);
+    margin-bottom: 8px;
+    letter-spacing: -0.5px;
+  }
+
+  .empty-state p {
+    font-size: 15px;
+    line-height: 1.6;
+    margin-bottom: 24px;
+    color: var(--text-light);
+  }
+
+  .suggestion-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+  }
+
+  .chip {
+    background: white;
+    border: 2px solid var(--cream);
+    border-radius: 24px;
+    padding: 10px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    color: var(--text-dark);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    font-family: 'Sora', sans-serif;
+  }
+
+  .chip:hover {
+    border-color: var(--viktor-gold);
+    background: var(--warm-bg);
+    color: var(--viktor-blue);
+    box-shadow: 0 4px 16px rgba(212, 165, 116, 0.2);
+    transform: translateY(-2px);
+  }
+
+  .chip:active { transform: translateY(0); }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Budapest <span>Guide</span></h1>
+  </div>
+  <div class="header-right">
+    <div id="location-pill">📍 Locating...</div>
+    <button id="map-toggle-btn" onclick="toggleMap()">🗺️ Show Map</button>
+  </div>
+</header>
+
+<div id="map-container">
+  <div id="map"></div>
+</div>
+
+<div id="chat-area">
+  <div class="empty-state">
+    <h2>Discover Budapest</h2>
+    <p>Ask Viktor, Zsuzsi and Áron<br>for personalized recommendations</p>
+    <div class="suggestion-chips">
+      <div class="chip" onclick="send('Where should I eat near me?')">🍽️ Where to eat?</div>
+      <div class="chip" onclick="send('I want to work out today')">💪 Gym / workout</div>
+      <div class="chip" onclick="send('What should I do this evening?')">🌆 Evening plans</div>
+      <div class="chip" onclick="send('Best coffee near me')">☕ Coffee</div>
+      <div class="chip" onclick="send('Bike rental near me')">🚲 Bike rental</div>
+    </div>
+  </div>
+</div>
+
+<div id="input-area">
+  <textarea id="msg-input" placeholder="Ask Viktor, Zsuzsi or Áron..." rows="1"
+    onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendFromInput()}"
+    oninput="autoResize(this)"></textarea>
+  <button id="send-btn" onclick="sendFromInput()">↑</button>
+</div>
+
+<script>
+let userLat = null, userLng = null;
+let leafletMap = null, markersLayer = null;
+
+navigator.geolocation.getCurrentPosition(
+  pos => {
+    userLat = pos.coords.latitude;
+    userLng = pos.coords.longitude;
+    document.getElementById('location-pill').textContent = `📍 ${userLat.toFixed(4)}, ${userLng.toFixed(4)}`;
+  },
+  () => { document.getElementById('location-pill').textContent = '📍 Location off'; }
+);
+
+marked.use({ breaks: true });
+
+function cleanResponse(text) {
+  // Remove metadata bold lines like **Open now · Bar · $$ · 4.3 (123 reviews)**
+  text = text.replace(/\*\*[^*]*·[^*]*\*\*\s*\n?/g, '');
+  // Remove inline citation refs like ([source.com](url))
+  text = text.replace(/\s*\(\[[^\]]+\]\([^)]+\)\)/g, '');
+  return text;
+}
+
+function renderMarkdown(text) {
+  let html = marked.parse(cleanResponse(text));
+  // All links open in new tab
+  html = html.replace(/<a href=/g, '<a target="_blank" rel="noopener noreferrer" href=');
+  // Plain bold names (no link inside, not a label) → Google Maps link
+  html = html.replace(/<strong>(?!<a[\s>])([^<]{3,70})<\/strong>/g, (match, name) => {
+    const t = name.trim();
+    if (t.includes(':') || /^[⭐€$£¥#\d]/.test(t)) return match;
+    const url = `https://www.google.com/maps/search/${encodeURIComponent(t + ' Budapest')}`;
+    return `<strong><a href="${url}" target="_blank" rel="noopener noreferrer">${name}</a></strong>`;
+  });
+  // em tags are display-only pills — no link conversion
+  return html;
+}
+
+// Map
+function initMap() {
+  if (leafletMap) return;
+  leafletMap = L.map('map').setView([47.4979, 19.0402], 13);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+  }).addTo(leafletMap);
+  markersLayer = L.layerGroup().addTo(leafletMap);
+}
+
+function toggleMap() {
+  const container = document.getElementById('map-container');
+  const btn = document.getElementById('map-toggle-btn');
+  const visible = container.style.display === 'block';
+  if (visible) {
+    container.style.display = 'none';
+    btn.textContent = '🗺️ Show Map';
+    btn.classList.remove('active');
+  } else {
+    container.style.display = 'block';
+    btn.textContent = '🗺️ Hide Map';
+    btn.classList.add('active');
+    initMap();
+    setTimeout(() => leafletMap.invalidateSize(), 100);
+  }
+}
+
+function extractPlaces(text) {
+  const matches = [...text.matchAll(/\*\*([^*\n]{3,60})\*\*/g)];
+  return matches.map(m => m[1].trim());
+}
+
+async function geocodePlace(name) {
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(name + ', Budapest')}&limit=1&accept-language=en`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if (data.length) return [parseFloat(data[0].lat), parseFloat(data[0].lon), data[0].display_name];
+  } catch {}
+  return null;
+}
+
+async function addMarkersForAgents(agents) {
+  if (!leafletMap) return;
+  const bounds = [];
+  for (const agent of agents) {
+    const places = extractPlaces(agent.response);
+    for (const place of places) {
+      const result = await geocodePlace(place);
+      if (result) {
+        const [lat, lng, displayName] = result;
+        const color = agent.name === 'Viktor' ? '#3d5a8c' : agent.name === 'Zsuzsi' ? '#c85a3a' : '#ff8c42';
+        const icon = L.divIcon({
+          className: '',
+          html: `<div style="background:${color};color:white;border-radius:50% 50% 50% 0;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:14px;transform:rotate(-45deg);box-shadow:0 2px 6px rgba(0,0,0,0.3)"><span style="transform:rotate(45deg)">${agent.emoji}</span></div>`,
+          iconAnchor: [14, 28],
+          popupAnchor: [0, -30]
+        });
+        L.marker([lat, lng], { icon }).addTo(markersLayer)
+          .bindPopup(`<b>${place}</b><br><small>${agent.emoji} ${agent.name}</small>`);
+        bounds.push([lat, lng]);
+      }
+    }
+  }
+  if (bounds.length > 0) {
+    leafletMap.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 });
+  }
+}
+
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+}
+
+function sendFromInput() {
+  const input = document.getElementById('msg-input');
+  const msg = input.value.trim();
+  if (!msg) return;
+  input.value = '';
+  input.style.height = 'auto';
+  send(msg);
+}
+
+async function send(message) {
+  const chatArea = document.getElementById('chat-area');
+  const sendBtn = document.getElementById('send-btn');
+
+  const empty = chatArea.querySelector('.empty-state');
+  if (empty) empty.remove();
+
+  const turn = document.createElement('div');
+  turn.className = 'turn';
+  turn.innerHTML = `<div class="user-bubble">${escHtml(message)}</div>`;
+
+  const typing = document.createElement('div');
+  typing.className = 'typing-indicator';
+  typing.innerHTML = '<div class="dot"></div><div class="dot"></div><div class="dot"></div>';
+  turn.appendChild(typing);
+  chatArea.appendChild(turn);
+  chatArea.scrollTop = chatArea.scrollHeight;
+
+  sendBtn.disabled = true;
+
+  try {
+    const res = await fetch('/chat', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({message, lat: userLat, lng: userLng})
+    });
+    const data = await res.json();
+    typing.remove();
+
+    if (data.error) {
+      const err = document.createElement('div');
+      err.style.color = '#c85a3a';
+      err.style.fontSize = '14px';
+      err.style.padding = '12px';
+      err.textContent = '⚠️ ' + data.error;
+      turn.appendChild(err);
+    } else {
+      data.agents.forEach(agent => {
+        const card = buildCard(agent);
+        turn.appendChild(card);
+      });
+      // Add map markers if map is open
+      if (document.getElementById('map-container').style.display === 'block') {
+        addMarkersForAgents(data.agents);
+      }
+    }
+  } catch (e) {
+    typing.remove();
+    const err = document.createElement('div');
+    err.style.color = '#c85a3a';
+    err.style.fontSize = '14px';
+    err.textContent = '⚠️ Connection error. Check your server.';
+    turn.appendChild(err);
+  }
+
+  sendBtn.disabled = false;
+  chatArea.scrollTop = chatArea.scrollHeight;
+}
+
+function buildCard(agent) {
+  const card = document.createElement('div');
+  card.className = 'agent-card';
+
+  if (agent.name === 'Viktor') card.classList.add('viktor');
+  else if (agent.name === 'Zsuzsi') card.classList.add('zsuzsi');
+  else if (agent.name === 'Áron') card.classList.add('aron');
+
+  const header = document.createElement('div');
+  header.className = 'agent-header';
+  header.innerHTML = `<span class="agent-emoji">${escHtml(agent.emoji)}</span><span class="agent-name">${escHtml(agent.name)}</span>`;
+
+  const body = document.createElement('div');
+  body.className = 'agent-body';
+  body.innerHTML = renderMarkdown(agent.response);
+
+  const mapsUrl = `https://www.google.com/maps/search/${encodeURIComponent(extractFirstPlace(agent.response) + ' Budapest')}`;
+  const btn = document.createElement('a');
+  btn.className = 'maps-btn';
+  btn.href = mapsUrl;
+  btn.target = '_blank';
+  btn.innerHTML = '🗺️ Show on Maps';
+
+  card.appendChild(header);
+  card.appendChild(body);
+  card.appendChild(btn);
+  return card;
+}
+
+function extractFirstPlace(text) {
+  const match = text.match(/[""]([^"""]+)[""]/) || text.match(/\*\*([^*]+)\*\*/) || ['', 'restaurant'];
+  return match[1] || 'restaurant';
+}
+
+function escHtml(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+</script>
+</body>
+</html>
